@@ -156,18 +156,23 @@ typedef uint16_t WORD;
 #error Need to find an 16-bit type for WORD
 #endif
  
-#define MEMSIZE 64
-BYTE ram[MEMSIZE*1024+1];       /* Z80 memory space */
+//#define MEMSIZE 64
+//BYTE ram[MEMSIZE*1024+1];       /* Z80 memory space */
 
 char *monitor;
 char *progname;
 
 bool  verbose;
 unsigned char keym[9];
+ 
+/********************************************************************/
+/* 		Prototypes                                              	*/
+/********************************************************************/
 
 int setup(int, char **);
+void save_nascom(int start, int end, const char *name);
 
-#define RAM(a)		ram[(a)&0xffff]
+//#define RAM(a)		ram[(a)&0xffff]
 
 /*****************************************************/
 
@@ -217,7 +222,7 @@ static char seg7hexA[  32]; /* lookup */
 */
 
 
-uint8_t seg7_font_raw[16*5] = {	
+uint8_t seg7_font_raw[16*4] = {	
 	/* ' ' */
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -232,11 +237,7 @@ uint8_t seg7_font_raw[16*5] = {
     
 	/* '.' */
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x60, 0xf0, 0xf0, 0x60, 0x00, 0x00,
-
-	/* '@' */
-    0x00, 0x00, 0x00, 0x00, 0x3c, 0x3c, 0x7e, 0x7e,
-    0x7e, 0x7e, 0x3c, 0x3c, 0x00, 0x00, 0x00, 0x00
+    0x00, 0x00, 0x60, 0xf0, 0xf0, 0x60, 0x00, 0x00
 
 };
 
@@ -337,6 +338,7 @@ int CONKeyPressed(int KeyID)
 while (kbhit())							/* new Key press ? */
 	{
 	KeyPressMatrix[CurrentKeyID] = 0;
+	
 	//CurrentKey = getch();				/* Get which key it was */
 	CurrentKey = toupper(CurrentKey);
 	//KeyTime = clock();					/* This is when we got it... */
@@ -346,27 +348,19 @@ while (kbhit())							/* new Key press ? */
 			CurrentKeyID = CurrentKey-'0';
 	if (CurrentKey >= 'A' && CurrentKey <= 'F')
 			CurrentKeyID = CurrentKey-'A'+10;
-	if (CurrentKey == 'T')
-			CurrentKeyID = KEY_TERM;
-	if (CurrentKey == 'M')
-			CurrentKeyID = KEY_MEM;
-	if (CurrentKey == 'Z')
-			CurrentKeyID = KEY_ABORT;
-	if (CurrentKey == 'G')
-			CurrentKeyID = KEY_GO;
-	if (CurrentKey == '/')
-			CurrentKeyID = KEY_BREAK;
-	if (CurrentKey == 'Q')
-			CurrentKeyID = KEY_BREAK;
-	if (CurrentKey == 'T')
-			CurrentKeyID = KEY_TERM;
-	if (CurrentKey == 'R')
-			CurrentKeyID = KEY_RESET;
-	if (CurrentKeyID >= 0)
-		KeyPressMatrix[CurrentKeyID] = 1;
+	if (CurrentKey == 'T')		CurrentKeyID = KEY_TERM;
+	if (CurrentKey == 'M')		CurrentKeyID = KEY_MEM;
+	if (CurrentKey == 'Z')		CurrentKeyID = KEY_ABORT;
+	if (CurrentKey == 'G')		CurrentKeyID = KEY_GO;
+	if (CurrentKey == '/')		CurrentKeyID = KEY_BREAK;
+	if (CurrentKey == 'Q')		CurrentKeyID = KEY_BREAK;
+	if (CurrentKey == 'T')		CurrentKeyID = KEY_TERM;
+	if (CurrentKey == 'R')		CurrentKeyID = KEY_RESET;
+	if (CurrentKeyID >= 0)		KeyPressMatrix[CurrentKeyID] = 1;
 	else
 		CurrentKeyID = 0;
 	}
+	
 #ifdef comment
 if (CurrentKey != ' ')					/* auto release after 2 ticks */
 	{
@@ -459,28 +453,25 @@ void handle_app_control(SDL_keysym keysym, bool keydown)
 
         switch (keysym.sym) {
         case SDLK_END: {
-            FILE *f;
-            f = fopen("memdump.bin", "a+");
-            fwrite((const void *) (ram+0x800), 1, 2048, f);
-            fclose(f);
+            printf("END key - saving memorykey pressed\n");
+            save_nascom(0xf00, 0xfff, "memorysave.nas");
             if (verbose) printf("mem dumped\n");
             break;
         }
 
-		/* add buttons for "tape recorder"  */
-        case SDLK_F1: /* simple Tape deck - press F1 to rewind input */
-            printf("key pressed f2 DOWN");
+        case SDLK_F1: 
+            printf("key pressed F1 DOWN\n");
 			break;
 
         case SDLK_F2:
-            printf("key pressed f2 DOWN");
+            printf("key pressed F2 DOWN\n");
 		    CurrentKey = 'M';
 			CurrentKeyID = KEY_MEM;
 			KeyPressMatrix[CurrentKeyID] = 1;
             break;
 
         case SDLK_F3:
-            printf("key pressed f2 DOWN");
+            printf("key pressed F3 DOWN\n");
 		    CurrentKey = 'G';
 			CurrentKeyID = KEY_GO;
 			KeyPressMatrix[CurrentKeyID] = 1;
@@ -488,7 +479,10 @@ void handle_app_control(SDL_keysym keysym, bool keydown)
 
 
         case SDLK_F4:
+            printf("key pressed F4 DOWN\n");
             action = DONE;
+            CurrentKeyID = KEY_BREAK;
+			KeyPressMatrix[CurrentKeyID] = 1;
             break;
 
         case SDLK_F5:
@@ -574,7 +568,7 @@ int load_nascom_ihx(char *file) {
        for( hex_count= 0 ; hex_count < hex_len ; hex_count++ ){
 	     hex_read = fscanf(stream, "%2x",&hex_data ); 	  
          printf(" %02X", hex_data );
-         RAM( hex_addr ) = hex_data ; 
+  //       RAM( hex_addr ) = hex_data ; 
          Memory[ hex_addr ] = hex_data ;
          hex_addr ++;
        }    
@@ -606,12 +600,14 @@ void save_nascom(int start, int end, const char *name)
         perror(name);
         return;
     }
-
-    for (uint8_t *p = ram + start; start < end; p += 8, start += 8)
+    if( f ){
+//    for (uint8_t *p = ram + start; start < end; p += 8, start += 8)
+      for (uint8_t *p = Memory + start; start < end; p += 8, start += 8)
         fprintf(f, "%04X %02X %02X %02X %02X %02X %02X %02X %02X %02X%c%c\r\n",
                 start, *p, p[1], p[2], p[3], p[4], p[5], p[6], p[7], 0, 8, 8);
 
-    fclose(f);
+      fclose(f);
+	}
 }
 
 void ui_serve_input(void)
@@ -844,7 +840,7 @@ int main(int argc, char **argv)
          "\n"
          "The following keys are supported:\n"
          "\n"
-         "* END - leaves a memdup`\n"
+         "* END - saves 0fXX to memorysave.nas \n"
          "* F4 - exits the emulator\n"
          "* F5 - toggles between stupidly fast and \"normal\" speed\n"
          "* F9 - resets the emulated Nascom\n"
@@ -897,7 +893,7 @@ int main(int argc, char **argv)
 	  loop_count += 1;
 	}  
     CONTerminate();
-    save_nascom(0x400, 0x10000, "memorydump.nas");
+    save_nascom(0xf00, 0xfff, "memorydump.nas");
 
     exit(0);
 }
