@@ -18,6 +18,9 @@
      Copyright (C) 2017  Doug Rice
 
      Z80 emulator portition Copyright (C) 1995,1998 Frank D. Cringle.
+     SC/MP emulator portition CPU.C Copyright (C) 1998 Paul Robson
+     
+	 Mash together copyright (C) Doug Rice
 
      This is free software; you can redistribute it and/or modify it
      under the terms of the GNU General Public License as published by
@@ -55,11 +58,32 @@
   * 
   * bits:  h,g,f,e,d,c,b,a
   * 
+  * The status register is displayed as a 4x2 grid on the right
+  * The status register:-
+  *	7   6  5  4  3  2  1  0
+  *	cy/l,OV,SB,SA,IE,F2,F1,F0
+  *	Bit Function 	Notes
+  *	0 	F0 	Output Line
+  *	1 	F1 	Output Line
+  *	2 	F2 	Output Line
+  *	3 	IE 	Interrupt Enable / HALT
+  *	4 	SA 	Input Line + INT,
+  *	5 	SB 	Input Line
+  *	6 	OV 	Overflow
+  *	7 	CY/L Carry / Link bit
+  *
+  * SA and SB are inputs, and work in needed here
+  * 
+  * SIN and SIO are an input and output, but not emulated yet.
+  * 
+  * 
   *  
   * The Keyboard is also a challenge.
   * 
   * =================================
-  * 0D00+   8  7  5  4  3  2  1  0
+  * Meoory map 0D07 on left, 0d00 is on right
+  * =================================
+  * 0D00+   7  6  5  4  3  2  1  0
   * =================================
   * bit7    7  6  5  4  3  2  1  0
   * bit6                      9  8
@@ -75,60 +99,79 @@
   * Z = ABORT
   * Q or  / quites emulator 
   *  
+  * G = GO		- run from displayed address
+  * M = MEM 	- increment address and allow hex input
+  * T = TERM 	- allow hex input
+  * Z = ABORT 	- allow address input
+  * 
+  * Q or  / quites emulator 
+
   * There is an array of which key is pressed. 
-  * This is indexed by two mappings, one for teh MK14 hardware 
+  * This is indexed by two mappings, one for the MK14 hardware 
   * and one for the PC character mappings.
   * 
   * The MK14 had hardware to aid scanning the keyboard.
-  * When the MK14 tests for a key press by reading an the display address.
+  * The MK14 tests for a key press by reading a display address.
+  * If a key is pressed the bit is low
   * 
   * the host pc's keyboard needs to interface to the simulated hardware
-  * This is done by a 
+  * This is done by arrays and functions. 
 
- *
- * To get this to build on Ubuntu and Raspberry Pi I needed to load SDL1.2
- * There is a later version of SDL
- * 
- * 
-Download SDL1.2
-Simple DirectMedia Layer - Homepage
-https://www.libsdl.org/
-Simple DirectMedia Layer is a cross-platform development library designed to provide
-SDL officially supports Windows, Mac OS X, Linux, iOS, and Android.
-‎SDL version 2.0.5 (stable) · ‎SDL Wiki · ‎SDL 1.2 · ‎License
+  *
+  * To get this to build on Ubuntu and Raspberry Pi I needed to load SDL1.2
+  * There is a later version of SDL
+  *
+  * ========================================================
+  * 
+  * SDL version
+  *
+  * Building this code needs SDL1.2
+  *  
+  *Download SDL1.2
+  *Simple DirectMedia Layer - Homepage
+  *https://www.libsdl.org/
+  *Simple DirectMedia Layer is a cross-platform development library designed to provide
+  *SDL officially supports Windows, Mac OS X, Linux, iOS, and Android.
+‎  *SDL version 2.0.5 (stable) · ‎SDL Wiki · ‎SDL 1.2 · ‎License
 
-download SDL1.2
-install
-./configure && make && 
-sudo make install
+  *download SDL1.2
+  *install
+  *./configure && make && 
+  *sudo make install
   *  
   *  
   * SDL version
-  *  
-  * gcc -O2 -Wall -I/usr/include/SDL -D_GNU_SOURCE=1 -D_REENTRANT -lSDL -lSDL   -c -o font.o font.c
-gcc -O2 -Wall -I/usr/include/SDL -D_GNU_SOURCE=1 -D_REENTRANT -lSDL -lSDL   -c -o simz80.o simz80.c
-gcc  -L/usr/lib/i386-linux-gnu -lSDL virtualnascom.o font.o simz80.o -o virtualnascom -lSDL -lSDL
-doug@doug-laptop:~/Downloads/virtual-nascom$ 
+  *
+  * type make
+  *    
 
 virtual-mk14: cpu.o memory.o virtual-mk14.o
 	$(CC) $(CWARN) $(shell sdl-config --libs) $^ -o $@ -lSDL
 
 doug@doug-laptop:~/Downloads/mk14/mk14_src_sdl$ make
 gcc -std=c99  -O2 -Wall -Wno-parentheses -I/usr/include/SDL -D_GNU_SOURCE=1 -D_REENTRANT   -c -o virtual-mk14.o virtual-mk14.c
-
+  *    
+  * usage: ./virtual-mk14 flags file.ihx
+  *    -v -verbose
+  * 	file.ihx is a file containing intel hex format 
+  * 
+  * 	It currently saves in NASCOM HEX format
+  * 
  *
  * Doug Rice, 2017
  * 
  * Possible changes:-
  * Add:
- *  memory dump
- *  disassembler
+ *  memory dump to file and console
+ *  disassembler to file / console
  *  load ihex from clipboard or file while running.
  *  Status LEDs
  *  add SIO SIN
  *  add SA,SB
  *
  * Code mash up needs a tidy. 
+ * 
+ * 
  */ 
 
 #include <stdio.h>
@@ -222,7 +265,23 @@ static char seg7hexA[  32]; /* lookup */
 */
 
 
+/*
+ * 
+ * The MK14 had a 7 segment display with thin segments.
+ * define one of these below:
+ * S7THIN - thin like the MK14 but not very visable 
+ * S7MEDIUM - most visable and readable
+ * S7THICK - clumsy
+ * 
+ */
+
+//#define S7THIN
+#define S7MEDIUM
+//#define S7THICK
+
 uint8_t seg7_font_raw[16*4] = {	
+
+#ifdef S7MEDIUM
 	/* ' ' */
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -239,6 +298,45 @@ uint8_t seg7_font_raw[16*4] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x60, 0xf0, 0xf0, 0x60, 0x00, 0x00
 
+#endif
+
+#ifdef S7THIN
+
+	/* ' ' */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+	/* '_' */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00,
+
+	/* '|' */	
+    0x00, 0x00, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x00, 0x00,
+    
+	/* '.' */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x60, 0xf0, 0x60, 0x60, 0x00, 0x00
+#endif
+
+#ifdef S7THICK
+	/* ' ' */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+	/* '_' */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x7e, 0xff, 0xff, 0xff, 0x7e, 0x00,
+
+	/* '|' */	
+    0x00, 0x00, 0x3c, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 
+    0x7e, 0x7e, 0x7E, 0x7e, 0x3c, 0x3c, 0x00, 0x00,
+    
+	/* '.' */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x60, 0xf0, 0x60, 0x60, 0x00, 0x00
+
+#endif
 };
 
 /*
@@ -362,6 +460,8 @@ while (kbhit())							/* new Key press ? */
 	}
 	
 #ifdef comment
+/* DOS does not has a keydown and key up, so use a times press */
+
 if (CurrentKey != ' ')					/* auto release after 2 ticks */
 	{
 	if (clock() > KeyTime+4)
@@ -453,14 +553,17 @@ void handle_app_control(SDL_keysym keysym, bool keydown)
 
         switch (keysym.sym) {
         case SDLK_END: {
-            printf("END key - saving memorykey pressed\n");
+            printf("END key - saving memory\n");
             save_nascom(0xf00, 0xfff, "memorysave.nas");
             if (verbose) printf("mem dumped\n");
             break;
         }
 
         case SDLK_F1: 
-            printf("key pressed F1 DOWN\n");
+            printf("F1 key - saving memory\n");
+            save_nascom(0xf00, 0xfff, "memorysave.nas");
+            if (verbose) printf("mem dumped\n");
+            break;
 			break;
 
         case SDLK_F2:
@@ -767,13 +870,38 @@ void ui_display_refresh_seg7(void)
 	x=8;
 
 	/* Status FLAG outputs connected to LEDs */
-	
+	/* This needs futher work SA and SA are inputs,
+	 * SIN,SIO needs to be displayed, but not in CPU.C yet 
+	 * Status shown in 4x2 grid
+	 * 
+The status register:-
+  7   6  5  4  3  2  1  0
+cy/l,OV,SB,SA,IE,F2,F1,F0
+Bit Function 	Notes
+0 	F0 	Output Line
+1 	F1 	Output Line
+2 	F2 	Output Line
+3 	IE 	Interrupt Enable / HALT
+4 	SA 	Input Line + INT,
+5 	SB 	Input Line
+6 	OV 	Overflow
+7 	CY/L Carry / Link bit
+	 */
+	/* F0 to F3 */ 
 	RenderItem(&seg7_font, ( ( Stat & 1 ) ? 1 : 3  ),  (x*4+4) * FONT_W, (FONT_V+0) * FONT_H);
 	RenderItem(&seg7_font, ( ( Stat & 2 ) ? 1 : 3  ),  (x*4+4) * FONT_W, (FONT_V+1) * FONT_H);
 	RenderItem(&seg7_font, ( ( Stat & 4 ) ? 1 : 3  ),  (x*4+4) * FONT_W, (FONT_V+2) * FONT_H);
-
     /* halt */ 
 	RenderItem(&seg7_font, ( ( Stat & 8 ) ? 1 : 3  ),  (x*4+4) * FONT_W, (FONT_V+3) * FONT_H);
+
+
+	/* flags */
+	RenderItem(&seg7_font, ( ( Stat & 0x10 ) ? 1 : 3  ),  (x*4+6) * FONT_W, (FONT_V+0) * FONT_H);
+	RenderItem(&seg7_font, ( ( Stat & 0x20 ) ? 1 : 3  ),  (x*4+6) * FONT_W, (FONT_V+1) * FONT_H);
+	RenderItem(&seg7_font, ( ( Stat & 0x40 ) ? 1 : 3  ),  (x*4+6) * FONT_W, (FONT_V+2) * FONT_H);
+	RenderItem(&seg7_font, ( ( Stat & 0x80 ) ? 1 : 3  ),  (x*4+6) * FONT_W, (FONT_V+3) * FONT_H);
+
+
 
 }
 
@@ -837,10 +965,14 @@ int main(int argc, char **argv)
          "./virtual-mk14 <file.hex>\n"
          "The emulator dumps the memory state in `memorydump.nas`\n"
          "upon exit so one might resume execution later on.\n"
+         "Status with  F0,F1,F2,IE is displayed on right in 2x4 grid.\n"
          "\n"
          "The following keys are supported:\n"
          "\n"
-         "* END - saves 0fXX to memorysave.nas \n"
+         "* END- saves 0fXX to memorysave.nas \n"
+         "* F1 - saves 0fXX to memorysave.nas \n"
+         "* F2 - MEM \n"
+         "* F3 - GO \n"
          "* F4 - exits the emulator\n"
          "* F5 - toggles between stupidly fast and \"normal\" speed\n"
          "* F9 - resets the emulated Nascom\n"
