@@ -6,7 +6,7 @@
 /*																	*/
 /********************************************************************/
 
-#define	DIGITS		(8)					/* LED Digit Count */
+#define	DIGITS		(9)					/* LED Digit Count */
 
 /********************************************************************/
 /*		The External Interface - Porting for various versions		*/
@@ -40,6 +40,9 @@ extern int Ptr[4];						/* SC/MP 16 bit Registers */
 extern unsigned char Memory[4096];		/* SC/MP Main Memory */
 extern long Cycles;						/* CPU Cycle Counter */
 
+extern int debugCounter;						/* CPU Cycle Counter */
+
+
 void MinimalistEmulator(char *);		/* All that's needed to emulate.. */
 int  LoadObject(char *);				/* Load file into memory */
 int  ReadMemory(int);					/* Read a byte from memory */
@@ -51,6 +54,8 @@ int  LoadROM(void);						/* Load the SCIOS ROM into memory */
 void OutStr(char *Text);				/* Output a String */
 void InitialiseDisplay(void);			/* Initialise the display */
 void Latency(void);						/* Latency test */
+
+
 
 /* This does the 12 bit ptr add. Basically there is no carry from bit   */
 /* 11 into bit 12, so bits 12..15 are always unchanged					*/

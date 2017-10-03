@@ -205,6 +205,8 @@ typedef uint16_t WORD;
 char *monitor;
 char *progname;
 
+int debugCounter = 0;
+		
 bool  verbose;
 unsigned char keym[9];
  
@@ -527,6 +529,7 @@ void handle_app_control(SDL_keysym keysym, bool keydown)
 	action = CONT;
 
     if (!keydown) {
+	
       switch (keysym.sym) {
         case SDLK_F2:
             printf("key pressed f2 UP\n");
@@ -615,6 +618,7 @@ void handle_key_event_raw(SDL_keysym keysym, bool keydown)
 	CurrentKey = keysym.sym;				/* Get which key it was */
 	CurrentKey = toupper(CurrentKey);
 
+
 	CurrentKeyID = -1;					/* Find out which key it is */
 	if (isdigit(CurrentKey))			CurrentKeyID = CurrentKey-'0';
 	if (CurrentKey >= 'A' && CurrentKey <= 'F')			CurrentKeyID = CurrentKey-'A'+10;
@@ -628,6 +632,7 @@ void handle_key_event_raw(SDL_keysym keysym, bool keydown)
 
    if (keydown) {
 	  if (CurrentKeyID >= 0)		KeyPressMatrix[CurrentKeyID] = 1;
+
 	  else {		CurrentKeyID = 0;    } 
       switch (keysym.sym) {
         default:
@@ -637,6 +642,12 @@ void handle_key_event_raw(SDL_keysym keysym, bool keydown)
     
    if (!keydown) {
       if (CurrentKeyID >= 0)	{	
+		/*  
+		 * Enable trace on key press
+		 * 
+	    printf( "key------------- %d --------\n", keysym.sym  );
+		debugCounter = 100;
+		* */
 		CurrentKey = ' ';
 		KeyPressMatrix[CurrentKeyID] = 0;
       }

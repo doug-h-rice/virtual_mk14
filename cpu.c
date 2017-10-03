@@ -5,7 +5,17 @@
 /*								CPU Emulator						*/
 /*																	*/
 /********************************************************************/
-
+/* This has been edited to fix jmp 0x80 bug							*/
+/* for jumps when DISP = 0x80, do not use E                         */
+/*																	*/
+/* SCIOS_v1 does not work with Paul Robson's code.					*/
+/*																	*/
+/* The jump below has a DISP of 0x80 								*/														
+/* 0161   107F E4 03       Gock:	xri	03		; check for term    */
+/* 0162   1081 98 80       	jz 	GoOut			; error if no term  */
+/*																	*/
+/********************************************************************/
+  
 #include "stdio.h"
 #include "scmp.h"
 
@@ -15,6 +25,8 @@ unsigned char Memory[4096];				/* SC/MP Program Memory */
 long Cycles;							/* Cycle Count */
 
 static int Indexed(int);                /* Local prototypes */
+/* bug in Paul Robson's emulator JMPS with offset 80 do not use E .*/
+static int IndexedJmp(int);             /* Local prototypes */
 static int AutoIndexed(int);
 static int BinAdd(int,int);
 static int DecAdd(int,int);
@@ -61,12 +73,14 @@ void Execute(int Count)
 {
 register int Opcode;
 register int Pointer;
-int n;
+int n,tmp;
 long l;
 
 while (Count-- > 0)
 	{
-    //printf("loop_execute %04X \n", Ptr[0]); 		
+/*		
+    printf("loop_execute %04X \n", Ptr[0]); 		
+*/
 
 #ifdef comment
 	while (Cycles > CYCLIMIT)			/* Check for cycle limit */
@@ -78,7 +92,18 @@ while (Count-- > 0)
 #endif
 	FETCH(Opcode);						/* Fetch the opcode, hack of the */
 	Pointer = Opcode & 3;				/* pointer reference */
+	if ( debugCounter > 0 ){
+		debugCounter--; 
+		printf("PC %04X: %04X: %04X: %04X:", Ptr[0],Ptr[1],Ptr[2],Ptr[3] ); 
+		printf("  a:%02X e:%02X s:%02X   op %02X ", Acc,Ext,Stat,Opcode  ); 
 
+		if (Opcode > 0x7F ){ 
+			tmp = Memory[(Ptr[0]+1) & 0xFFF];
+			printf("%02X  ea; %02X",  tmp , (Ptr[0]+tmp) ); 
+		}
+		printf(" addr:%02X%02X %0x02X",  Memory[ 0xF0E], Memory[ 0xF0C], Memory[ 0xF0D] ); 
+	printf("\n" ); 
+	}
 	switch(Opcode)						/* Pointer instructions first */
 		{
 										/* LD (Load) */
@@ -142,16 +167,16 @@ while (Count-- > 0)
 			CYC(7);break;
 
 		CAS4(0x90):							/* Jumps */
-			CYC(11);Ptr[0] = Indexed(Pointer);break;
+			CYC(11);Ptr[0] = IndexedJmp(Pointer);break;
 		CAS4(0x94):
-			CYC(11);n = Indexed(Pointer);
+			CYC(11);n = IndexedJmp(Pointer);
 			if ((Acc & 0x80) == 0) Ptr[0] = n;
 			break;
 		CAS4(0x98):
-			CYC(11);n = Indexed(Pointer);if (Acc == 0) Ptr[0] = n;
+			CYC(11);n = IndexedJmp(Pointer);if (Acc == 0) Ptr[0] = n;
 			break;
 		CAS4(0x9C):
-			CYC(11);n = Indexed(Pointer);if (Acc != 0) Ptr[0] = n;
+			CYC(11);n = IndexedJmp(Pointer);if (Acc != 0) Ptr[0] = n;
 			break;
 
 		CAS4(0xA8):							/* ILD and DLD */
@@ -260,6 +285,20 @@ if (Offset == 0x80) Offset = Ext;		/* Using 'E' register ? */
 if (Offset & 0x80) Offset = Offset-256;	/* Sign extend */
 return(ADD12(Ptr[p],Offset));			/* Return result */
 }
+
+/********************************************************************/
+/*							Indexing Mode for Jumps 				*/
+/********************************************************************/
+
+static int IndexedJmp(int p)
+{
+int Offset;
+FETCH(Offset);							/* Get offset */
+/* if (Offset == 0x80) Offset = Ext; */	/* Using 'E' register ? */
+if (Offset & 0x80) Offset = Offset-256;	/* Sign extend */
+return(ADD12(Ptr[p],Offset));			/* Return result */
+}
+
 
 /********************************************************************/
 /*						  Auto-indexing mode						*/

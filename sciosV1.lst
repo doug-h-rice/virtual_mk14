@@ -1,0 +1,520 @@
+0001   0000             ; ****************************************************************************
+0002   0000             ;
+0003   0000             ;                               The Original SC/MP I/O Monitor.
+0004   0000             ;
+0005   0000             ;       Converted to TASM by Colin Phillips (webmaster@mymk14.co.uk)
+0006   0000             ;       Uses splendid TASM work done by Paul Robson (autismuk@aol.com)
+0007   0000             ;
+0008   0000             ; ****************************************************************************
+0009   0000             
+0010   0000             #define High(x)         (((x) >> 8) & 15)
+0011   0000             #define Low(x)          ((x) & 255)
+0012   0000             #define DatPtr(a)       ((a)+1)
+0013   0000             #define DatPtrD(a)	((a)-1)
+0014   0000             #define js(x,y)		ldi High(DatPtrD(y))\ xpah x\ ldi Low(DatPtrD(y))\ xpal x\ xppc x
+0015   0000             
+0016   0000             Ram     .equ    0F00h                   ; this is where the standard RAM is
+0017   0000             Disp    .equ    0D00h                   ; this is where the display is
+0018   0000             
+0019   0000             ; ****************************************************************************
+0020   0000             ;       Offsets into the data structure , from P2
+0021   0000             ; ****************************************************************************
+0022   0000             dl      .equ    0                       ; Segment for Digit 1
+0023   0000             dh      .equ    1                       ; Segment for Digit 2
+0024   0000             d3      .equ    2                       ; Segment for Digit 3
+0025   0000             d4      .equ    3                       ; Segment for Digit 4
+0026   0000             adll    .equ    4                       ; Segment for Digit 5
+0027   0000             adlh    .equ    5                       ; Segment for Digit 6
+0028   0000             adhl    .equ    6                       ; Segment for Digit 7
+0029   0000             adhh    .equ    7                       ; Segment for Digit 8
+0030   0000             d9      .equ    8                       ; Segment for Digit 9
+0031   0000             cnt     .equ    9                       ; Counter
+0032   0000             pushed  .equ    10                      ; Key pushed
+0033   0000             char    .equ    11                      ; Char Read
+0034   0000             adl     .equ    12                      ; Memory Address (low)
+0035   0000             word    .equ    13                      ; Memory Word
+0036   0000             adh     .equ    14                      ; Memory Address (High)
+0037   0000             ddta    .equ    15                      ; first flag
+0038   0000             row     .equ    16                      ; row counter
+0039   0000             next    .equ    17                      ; flag for now data
+0040   0000             ; ****************************************************************************
+0041   0000             ;       Ram areas used by SCIOS. P3 is saved elsewhere
+0042   0000             ;       The Data macro is used because of the pre-increment of the PC
+0043   0000             ;       in the processor isn't supported by TASM.
+0044   0000             ; ****************************************************************************
+0045   0000             p1h     .equ    DatPtr(0FF9h)
+0046   0000             p1l     .equ    DatPtr(0FFAh)
+0047   0000             p2h     .equ    DatPtr(0FFBh)
+0048   0000             p2l     .equ    DatPtr(0FFCh)
+0049   0000             a       .equ    DatPtr(0FFDh)
+0050   0000             e       .equ    DatPtr(0FFEh)
+0051   0000             s       .equ    DatPtr(0FFFh)
+0052   0000             
+0053   0000             ; ****************************************************************************
+0054   0000             ;                               Segment Data
+0055   0000             ; ****************************************************************************
+0056   0000             SA      .equ    1                       ; Segment bit patterns
+0057   0000             SB      .equ    2
+0058   0000             SC      .equ    4
+0059   0000             SD      .equ    8
+0060   0000             SE      .equ    16
+0061   0000             SF      .equ    32
+0062   0000             SG      .equ    64
+0063   0000             ; ****************************************************************************
+0064   0000             ;                               Character Segment Maps
+0065   0000             ; ****************************************************************************
+0066   0000             DASH	.equ	SG
+0067   0000             KE	.equ	SA+SD+SE+SF+SG
+0068   0000             KR	.equ	SE+SG
+0069   0000             K0	.equ	SC+SD+SE+SG
+0070   0000             ; ****************************************************************************
+0071   0000             ;                       Start of monitor listing
+0072   0000             ; ****************************************************************************
+0073   1000                     .org    1000h                   ; stops TASM complaining...
+0074   1000 08                  nop
+0075   1001 90 1D               jmp Start			
+0076   1003                     				
+0077   1003             ; ****************************************************************************
+0078   1003             ;                   Debug exit : restore environment
+0079   1003             ; ****************************************************************************
+0080   1003 C2 0E       GoOut:  ld	adh(2)			; get address
+0081   1005 37          	xpah    3                       ; Save A in P3 (A is Go address High)
+0082   1006 C2 0C               ld      adl(2)
+0083   1008 33                  xpal    3
+0084   1009 C7 FF               ld      @-1(3)                  ; fix go address
+0085   100B C0 F2               ld      e                       ; restore registers
+0086   100D 01                  xae
+0087   100E C0 EB               ld      p1l
+0088   1010 31                  xpal    1
+0089   1011 C0 E7               ld      p1h
+0090   1013 35                  xpah    1
+0091   1014 C0 E7               ld      p2l
+0092   1016 32                  xpal    2
+0093   1017 C0 E3               ld      p2h
+0094   1019 36                  xpah    2
+0095   101A C0 E4               ld      s
+0096   101C 07                  cas
+0097   101D C0 DF               ld      a
+0098   101F 3F                  xppc    3
+0099   1020             ; ****************************************************************************
+0100   1020             ;                               Debug Entry Point
+0101   1020             ; ****************************************************************************
+0102   1020 C8 DC       Start:  st      a                       ; Copy all registers to memory
+0103   1022 40                  lde
+0104   1023 C8 DA               st      e
+0105   1025 06                  csa
+0106   1026 C8 D8               st      s
+0107   1028 35                  xpah    1
+0108   1029 C8 CF               st      p1h
+0109   102B 31                  xpal    1
+0110   102C C8 CD               st      p1l
+0111   102E C4 0F               ldi     High(Ram)               ; Copy P2, make it point to RAM
+0112   1030 36                  xpah    2                       ; at the same time
+0113   1031 C8 C9               st      p2h
+0114   1033 C4 00               ldi     Low(Ram)
+0115   1035 32                  xpal    2
+0116   1036 C8 C5               st      p2l
+0117   1038 C7 01               ld      @1(3)                   ; Bump P3 for return
+0118   103A 33                  xpal    3                       ; save P3
+0119   103B CA 0C               st      adl(2)
+0120   103D 37                  xpah    3
+0121   103E CA 0E               st      adh(2)
+0122   1040             ; ****************************************************************************
+0123   1040             ;                               Abort
+0124   1040             ; ****************************************************************************
+0125   1040 C4 00       Abort: 	ldi	0
+0126   1042 CA 02            	st	d3(2)
+0127   1044 CA 03            	st	d4(2)
+0128   1046 08               	nop				; Previously st d9(2) - stop blanking of 
+0129   1047 08               	nop				; 9th digit to keep page number.
+0130   1048 C4 40            	ldi	DASH			; set segments to "-"
+0131   104A CA 00            	st	dl(2)
+0132   104C CA 01            	st	dh(2)
+0133   104E CA 04            	st	adll(2)
+0134   1050 CA 05            	st	adlh(2)
+0135   1052 CA 06            	st	adhl(2)
+0136   1054 CA 07            	st	adhh(2)
+0137   1056 C4 01       Wait:	js(3,Kybd)			; display & read keyboard
+0137   1058 37          
+0137   1059 C4 84       
+0137   105B 33          
+0137   105C 3F          
+0138   105D 90 02       	jmp	Wck			; command return
+0139   105F 90 DF       	jmp	Abort			; return for number
+0140   1061 E4 07       Wck:	xri	07			; check if mem
+0141   1063 98 56       	jz	Mem
+0142   1065 E4 01       	xri	01			; check if Go
+0143   1067 9C D7       	jnz	Abort
+0144   1069             ; ****************************************************************************
+0145   1069             ;                              Go was pushed
+0146   1069             ;				goto user programme
+0147   1069             ; ****************************************************************************
+0148   1069 C4 FF       Go:	ldi	-1			; set first flag
+0149   106B CA 0F       	st 	ddta(2)
+0150   106D C4 40       	ldi	DASH			; set data to dash
+0151   106F CA 00       	st	dl(2)
+0152   1071 CA 01       	st	dh(2)
+0153   1073 C4 59       Gol:	ldi 	Low(Dispa)-1		; fix address seg
+0154   1075 33          	xpal	3
+0155   1076 3F          	xppc	3			; do display and keyboard
+0156   1077 90 06       	jmp	Gock			; command return
+0157   1079 C4 1A       	ldi	Low(adr-1)		; set address
+0158   107B 33          	xpal	3
+0159   107C 3F          	xppc	3			
+0160   107D 90 F4       	jmp	Gol			; not done		
+0161   107F E4 03       Gock:	xri	03			; check for term
+0162   1081 98 80       	jz 	GoOut			; error if no term
+0163   1083             ; ****************************************************************************
+0164   1083             ;                              Incorrect sequence
+0165   1083             ;				display error, wait for new input
+0166   1083             ; ****************************************************************************
+0167   1083 C4 79       Error:	ldi	KE			; fill with error        
+0168   1085 CA 07               st	adhh(2)
+0169   1087 C4 50               ldi	KR
+0170   1089 CA 06               st	adhl(2)
+0171   108B CA 05               st	adlh(2)
+0172   108D CA 03               st	d4(2)
+0173   108F C4 5C               ldi	K0
+0174   1091 CA 04               st	adll(2)
+0175   1093 C4 00               ldi	0
+0176   1095 CA 02               st	d3(2)
+0177   1097 CA 01               st	dh(2)
+0178   1099 CA 00               st	dl(2)
+0179   109B 90 B9               jmp	Wait
+0180   109D             ; ****************************************************************************
+0181   109D             ;                              Memory transactions
+0182   109D             ; ****************************************************************************
+0183   109D C2 11       Dtack:	ld	next(2)			; check if data field
+0184   109F 9C 36       	jnz	Data			; address done
+0185   10A1 C2 0E       Memdn:	ld	adh(2)			; put word in mem
+0186   10A3 35          	xpah	1
+0187   10A4 C2 0C       	ld	adl(2)
+0188   10A6 31          	xpal	1
+0189   10A7 C2 0D       	ld	word(2)
+0190   10A9 C9 00       	st	(1)
+0191   10AB 90 0E       	jmp	Mem
+0192   10AD E4 06       Memck:	xri	06			; check for go
+0193   10AF 98 D2       	jz	Error			; can not go now
+0194   10B1 E4 05       	xri	05			; check for term
+0195   10B3 98 E8       	jz	Dtack			; check if done
+0196   10B5 AA 0C       	ild	adl(2)			; update address low
+0197   10B7 9C 02       	jnz	Mem			; check if update hi
+0198   10B9 AA 0E       	ild	adh(2)
+0199   10BB             ;	Mem key pushed
+0200   10BB C4 FF       Mem:	ldi	-1			; set first flag
+0201   10BD CA 11       	st	next(2)			; set flag for address now
+0202   10BF CA 0F       	st	ddta(2)
+0203   10C1 C2 0E       Meml:	ld	adh(2)
+0204   10C3 35          	xpah	1			; set P1 for mem address
+0205   10C4 C2 0C       	ld	adl(2)
+0206   10C6 31          	xpal	1
+0207   10C7 C1 00       	ld	(1)
+0208   10C9 CA 0D       	st	word(2)			; save mem data
+0209   10CB C4 3F       	ldi	Low(dispd)-1		; fix data seg
+0210   10CD 33          	xpal	3
+0211   10CE 3F          	xppc	3			; go to DISPD set seg for data
+0212   10CF 90 DC       	jmp	Memck			; command return
+0213   10D1 C4 1A       	ldi	Low(adr)-1		; make address
+0214   10D3 33          	xpal	3
+0215   10D4 3F          	xppc	3
+0216   10D5 90 EA       	jmp	Meml			; get next char
+0217   10D7 C4 FF       Data:	ldi	-1			; set first flag
+0218   10D9 CA 0F       	st	ddta(2)
+0219   10DB C2 0E       	ld	adh(2)			; set P1 to memory address
+0220   10DD 35          	xpah	1
+0221   10DE C2 0C       	ld	adl(2)
+0222   10E0 31          	xpal	1
+0223   10E1 C1 00       	ld	(1)			; read data word
+0224   10E3 CA 0D       	st	word(2)			; save for display
+0225   10E5 C4 3F       Datal:	ldi	Low(dispd)-1		; fix data seg
+0226   10E7 33          	xpal	3
+0227   10E8 3F          	xppc	3			; fix data seg-go to dispd
+0228   10E9 90 C2       	jmp	Memck			; char return
+0229   10EB C4 04       	ldi	4			; set counter for number of shifts
+0230   10ED CA 09       	st	cnt(2)
+0231   10EF AA 0F       	ild	ddta(2)			; check if first
+0232   10F1 9C 06       	jnz	Dnfst
+0233   10F3 C4 00       	ldi	0			; zero word if first
+0234   10F5 CA 0D       	st	word(2)
+0235   10F7 CA 11       	st	next(2)			; set flag for address done
+0236   10F9 02          Dnfst:	ccl
+0237   10FA C2 0D       	ld	word(2)			; shift left
+0238   10FC F2 0D       	add	word(2)
+0239   10FE CA 0D       	st	word(2)
+0240   1100 BA 09       	dld	cnt(2)			; check for 4 shifts
+0241   1102 9C F5       	jnz	Dnfst
+0242   1104 C2 0D       	ld	word(2)			; add new data
+0243   1106 58          	ore
+0244   1107 CA 0D       	st	word(2)
+0245   1109 90 DA       	jmp	Datal
+0246   110B             	
+0247   110B             ; ****************************************************************************
+0248   110B             ;                    Hex number to seven segment table
+0249   110B             ; ****************************************************************************
+0250   110B 3F          CRom:   .db     SA+SB+SC+SD+SE+SF
+0251   110C 06                  .db     SB+SC
+0252   110D 5B                  .db     SA+SB+SD+SE+SG
+0253   110E 4F                  .db     SA+SB+SC+SD+SG
+0254   110F 66                  .db     SB+SC+SF+SG
+0255   1110 6D                  .db     SA+SC+SD+SF+SG
+0256   1111 7D                  .db     SA+SC+SD+SE+SF+SG
+0257   1112 07                  .db     SA+SB+SC
+0258   1113 7F                  .db     SA+SB+SC+SD+SE+SF+SG
+0259   1114 67                  .db     SA+SB+SC+SF+SG
+0260   1115 77                  .db     SA+SB+SC+SE+SF+SG
+0261   1116 7C                  .db     SC+SD+SE+SF+SG
+0262   1117 39                  .db     SA+SD+SE+SF
+0263   1118 5E                  .db     SB+SC+SD+SE+SG
+0264   1119 79                  .db     SA+SD+SE+SF+SG
+0265   111A 71                  .db     SA+SE+SF+SG
+0266   111B                     
+0267   111B             ; ****************************************************************************
+0268   111B             ;                    Make 4 digit address
+0269   111B             ; ****************************************************************************
+0270   111B             ; shift address left one digit then
+0271   111B             ; add new low hex digit
+0272   111B             ; hex digit in E register
+0273   111B             ; P2 points to RAM
+0274   111B C4 04       adr:	ldi	4			; set number of shifts
+0275   111D CA 09       	st	cnt(2)
+0276   111F AA 0F       	ild	ddta(2)			; check if first
+0277   1121 9C 06       	jnz	Notfst			; jmp if no.
+0278   1123 C4 00       	ldi	0			; zero address
+0279   1125 CA 0E       	st	adh(2)
+0280   1127 CA 0C       	st	adl(2)
+0281   1129 02          Notfst:	ccl				; clear link
+0282   112A C2 0C       	ld	adl(2)			; shift address left 4 times
+0283   112C F2 0C       	add	adl(2)
+0284   112E CA 0C       	st	adl(2)			; save it
+0285   1130 C2 0E       	ld	adh(2)			; now shift high
+0286   1132 F2 0E       	add	adh(2)
+0287   1134 CA 0E       	st	adh(2)
+0288   1136 BA 09       	dld	cnt(2)			; check if shifted 4 times
+0289   1138 9C EF       	jnz	Notfst			; jmp if not done
+0290   113A C2 0C       	ld	adl(2)			; now add new number
+0291   113C 58          	ore
+0292   113D CA 0C       	st	adl(2)			; number is now updated
+0293   113F 3F          	xppc	3
+0294   1140             	
+0295   1140             ; ****************************************************************************
+0296   1140             ;                    Data to Segments
+0297   1140             ; ****************************************************************************
+0298   1140             ; convert hex data to segments
+0299   1140             ; P2 points to RAM
+0300   1140             ; drops through to hex address conversion
+0301   1140 C4 01       dispd:	ldi	High(CRom)		; set address of table
+0302   1142 35          	xpah	1
+0303   1143 C4 0B       	ldi	Low(CRom)
+0304   1145 31          	xpal	1
+0305   1146 C2 0D       	ld	word(2)			; get memory word
+0306   1148 D4 0F       	ani	$0F
+0307   114A 01          	xae
+0308   114B C1 80       	ld	-128(1)			; get segment disp
+0309   114D CA 00       	st	dl(2)			; save at data low
+0310   114F C2 0D       	ld	word(2)			; fix hi
+0311   1151 1C          	sr				; shift hi to low
+0312   1152 1C          	sr
+0313   1153 1C          	sr
+0314   1154 1C          	sr
+0315   1155 01          	xae
+0316   1156 C1 80       	ld	-128(1)			; get segments
+0317   1158 CA 01       	st	dh(2)			; save in data hi
+0318   115A             	
+0319   115A             ; ****************************************************************************
+0320   115A             ;                    Address to Segments
+0321   115A             ; ****************************************************************************
+0322   115A             ; convert hex address to segments
+0323   115A             ; P2 points to RAM
+0324   115A             ; drops through to keyboard and display
+0325   115A 03          Dispa:	scl
+0326   115B C4 01       	ldi	High(CRom)		; set address of table
+0327   115D 35          	xpah	1
+0328   115E C4 0B       	ldi	Low(CRom)
+0329   1160 31          	xpal	1
+0330   1161 C2 0C       Loopd:	ld	adl(2)			; get address
+0331   1163 D4 0F       	ani	$0F
+0332   1165 01          	xae
+0333   1166 C1 80       	ld	-128(1)			; get segments
+0334   1168 CA 04       	st	adll(2)			; save seg of adr ll
+0335   116A C2 0C       	ld	adl(2)
+0336   116C 1C          	sr				; shift hi digit to low
+0337   116D 1C          	sr
+0338   116E 1C          	sr
+0339   116F 1C          	sr
+0340   1170 01          	xae
+0341   1171 C1 80       	ld	-128(1)			; get segments
+0342   1173 CA 05       	st	adlh(2)
+0343   1175 06          	csa				; check if done
+0344   1176 D4 80       	ani	$80
+0345   1178 98 09       	jz	Done
+0346   117A 02          	ccl				; clear flag
+0347   117B C4 00       	ldi	0
+0348   117D CA 03       	st	d4(2)			; zero digit 4
+0349   117F C6 02       	ld	@2(2)			; fix P2 for next loop
+0350   1181 90 DE       	jmp	Loopd
+0351   1183 C6 FE       Done:	ld	@-2(2)			; fix P2
+0352   1185             ; ****************************************************************************
+0353   1185             ;                    Display and Keyboard Input
+0354   1185             ; ****************************************************************************
+0355   1185             ; call xppc 3
+0356   1185             ; jmp command in A GO=6, MEM=7, TERM=3
+0357   1185             ; in E GO=22, MEM=23, TERM=27
+0358   1185             ; number return hex number in E reg
+0359   1185             ; abort key goes to abort
+0360   1185             ; all registers are used
+0361   1185             ; P2 must point to RAM, address must be XXX0
+0362   1185             ; to re-execute routine do xppc p3
+0363   1185 C4 00       Kybd:	ldi	0			; zero char
+0364   1187 CA 0B       	st	char(2)
+0365   1189 C4 0D       	ldi	High(Disp)		; set display address
+0366   118B 35          	xpah	1
+0367   118C C4 FF       Off:	ldi	-1			; set row/digit address
+0368   118E CA 10       	st	row(2)			; save row counter
+0369   1190 C4 0A       	ldi	10			; set row count
+0370   1192 CA 09       	st	cnt(2)
+0371   1194 C4 00       	ldi	0
+0372   1196 CA 0A       	st	pushed(2)		; zero keyboard input
+0373   1198 31          	xpal	1			; set disp address low
+0374   1199 AA 10       Loop:	ild	row(2)			; update row address
+0375   119B 01          	xae
+0376   119C C2 80       	ld	-128(2)			; get segment
+0377   119E C9 80       	st	-128(1)			; send it
+0378   11A0 8F 00       	dly	0			; delay for display
+0379   11A2 C1 80       	ld	-128(1)			; get keyboard input
+0380   11A4 E4 FF       	xri	$ff			; check if pushed
+0381   11A6 9C 4C       	jnz	Key			; jump if pushed
+0382   11A8 BA 09       Back:	dld	cnt(2)			; check if done
+0383   11AA 9C ED       	jnz	Loop			; no if jump
+0384   11AC C2 0A       	ld	pushed(2)		; check if key
+0385   11AE 98 0A       	jz	Ckmore
+0386   11B0 C2 0B       	ld	char(2)			; was there a char?
+0387   11B2 9C D8       	jnz	Off			; yes, wait for release
+0388   11B4 C2 0A       	ld	pushed(2)		; no set char
+0389   11B6 CA 0B       	st	char(2)
+0390   11B8 90 D2       	jmp	Off
+0391   11BA C2 0B       Ckmore:	ld	char(2)			; check if there was a char
+0392   11BC 98 CE       	jz	Off			; no, keep looking
+0393   11BE             ; ****************************************************************************
+0394   11BE             ;                    Command key processing
+0395   11BE             ; ****************************************************************************
+0396   11BE 01          	xae				; save char
+0397   11BF 40          	lde				; get char
+0398   11C0 D4 20       	ani	$20			; check for command
+0399   11C2 9C 28       	jnz	Cmnd			; jump if command
+0400   11C4 C4 80       	ldi	$80			; find number
+0401   11C6 50          	ane
+0402   11C7 9C 1B       	jnz	Lt7			; 0 to 7
+0403   11C9 C4 40       	ldi	$40
+0404   11CB 50          	ane
+0405   11CC 9C 19       	jnz	N89			; 8 or 9
+0406   11CE C4 0F       	ldi	$0F
+0407   11D0 50          	ane
+0408   11D1 F4 07       	adi	$07			; make offset to table
+0409   11D3 01          	xae				; put offset away
+0410   11D4 C0 80       	ld	-128(0)			; get number
+0411   11D6 01          Keyrtn:	xae				; save in E
+0412   11D7 C7 02       	ld	@2(3)			; fix return
+0413   11D9 3F          	xppc	3			; return
+0414   11DA 90 A9       	jmp	Kybd			; allows xppc P3 to return
+0415   11DC             	
+0416   11DC 0A          	.db	$0A
+0417   11DD 0B          	.db	$0B
+0418   11DE 0C          	.db 	$0C
+0419   11DF 0D          	.db	$0D
+0420   11E0 00          	.db	$00
+0421   11E1 00          	.db	$00
+0422   11E2 0E          	.db	$0E
+0423   11E3 0F          	.db	$0F
+0424   11E4             	
+0425   11E4 60          Lt7:	xre				; keep low digit
+0426   11E5 90 EF       	jmp	Keyrtn
+0427   11E7 60          N89:	xre				; get low
+0428   11E8 F4 08       	adi	$08			; make digit 8 or 9
+0429   11EA 90 EA       	jmp	Keyrtn
+0430   11EC 60          Cmnd:	xre
+0431   11ED E4 04       	xri	$04			; check if abort
+0432   11EF 98 08       	jz	Abrt			; abort
+0433   11F1 3F          	xppc	3			; in E 23=MEM, 22=GO, 27=TERM
+0434   11F2             					; in A 7=MEM, 6=GO, 3=TERM
+0435   11F2 90 91       	jmp	Kybd			; allows just a xppc p3 to return
+0436   11F4 58          Key:	ore				; make char
+0437   11F5 CA 0A       	st	pushed(2)		; save char
+0438   11F7 90 AF       	jmp	Back
+0439   11F9 C4 00       Abrt:	ldi	High(Abort)
+0440   11FB 37          	xpah	3
+0441   11FC C4 3F       	ldi	Low(Abort)-1
+0442   11FE 33          	xpal	3
+0443   11FF 3F          	xppc	3			; go to abort
+0444   1200             	
+0445   1200             	.END
+0446   1200             	
+0447   1200             	
+0448   1200                     
+
+
+Label        Value      Label        Value      Label        Value
+------------------      ------------------      ------------------
+Abort         1040      Abrt          11F9      Back          11A8      
+CRom          110B      Ckmore        11BA      Cmnd          11EC      
+Disp          0D00      DASH          0040      Dtack         109D      
+Data          10D7      Datal         10E5      Dnfst         10F9      
+Dispa         115A      Done          1183      Error         1083      
+GoOut         1003      Go            1069      Gol           1073      
+Gock          107F      KE            0079      KR            0050      
+K0            005C      Kybd          1185      Keyrtn        11D6      
+Key           11F4      Loopd         1161      Loop          1199      
+Lt7           11E4      Memdn         10A1      Memck         10AD      
+Mem           10BB      Meml          10C1      Notfst        1129      
+N89           11E7      Off           118C      Ram           0F00      
+SA            0001      SB            0002      SC            0004      
+SD            0008      SE            0010      SF            0020      
+SG            0040      Start         1020      Wait          1056      
+Wck           1061      adll          0004      adlh          0005      
+adhl          0006      adhh          0007      adl           000C      
+adh           000E      a             0FFE      adr           111B      
+cnt           0009      char          000B      dl            0000      
+dh            0001      d3            0002      d4            0003      
+d9            0008      ddta          000F      dispd         1140      
+e             0FFF      next          0011      pushed        000A      
+p1h           0FFA      p1l           0FFB      p2h           0FFC      
+p2l           0FFD      row           0010      s             1000      
+word          000D      
+
+
+ADDR  00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F
+-----------------------------------------------------
+1000  08 90 1D C2 0E 37 C2 0C 33 C7 FF C0 F2 01 C0 EB
+1010  31 C0 E7 35 C0 E7 32 C0 E3 36 C0 E4 07 C0 DF 3F
+1020  C8 DC 40 C8 DA 06 C8 D8 35 C8 CF 31 C8 CD C4 0F
+1030  36 C8 C9 C4 00 32 C8 C5 C7 01 33 CA 0C 37 CA 0E
+1040  C4 00 CA 02 CA 03 08 08 C4 40 CA 00 CA 01 CA 04
+1050  CA 05 CA 06 CA 07 C4 01 37 C4 84 33 3F 90 02 90
+1060  DF E4 07 98 56 E4 01 9C D7 C4 FF CA 0F C4 40 CA
+1070  00 CA 01 C4 59 33 3F 90 06 C4 1A 33 3F 90 F4 E4
+1080  03 98 80 C4 79 CA 07 C4 50 CA 06 CA 05 CA 03 C4
+1090  5C CA 04 C4 00 CA 02 CA 01 CA 00 90 B9 C2 11 9C
+10A0  36 C2 0E 35 C2 0C 31 C2 0D C9 00 90 0E E4 06 98
+10B0  D2 E4 05 98 E8 AA 0C 9C 02 AA 0E C4 FF CA 11 CA
+10C0  0F C2 0E 35 C2 0C 31 C1 00 CA 0D C4 3F 33 3F 90
+10D0  DC C4 1A 33 3F 90 EA C4 FF CA 0F C2 0E 35 C2 0C
+10E0  31 C1 00 CA 0D C4 3F 33 3F 90 C2 C4 04 CA 09 AA
+10F0  0F 9C 06 C4 00 CA 0D CA 11 02 C2 0D F2 0D CA 0D
+1100  BA 09 9C F5 C2 0D 58 CA 0D 90 DA 3F 06 5B 4F 66
+1110  6D 7D 07 7F 67 77 7C 39 5E 79 71 C4 04 CA 09 AA
+1120  0F 9C 06 C4 00 CA 0E CA 0C 02 C2 0C F2 0C CA 0C
+1130  C2 0E F2 0E CA 0E BA 09 9C EF C2 0C 58 CA 0C 3F
+1140  C4 01 35 C4 0B 31 C2 0D D4 0F 01 C1 80 CA 00 C2
+1150  0D 1C 1C 1C 1C 01 C1 80 CA 01 03 C4 01 35 C4 0B
+1160  31 C2 0C D4 0F 01 C1 80 CA 04 C2 0C 1C 1C 1C 1C
+1170  01 C1 80 CA 05 06 D4 80 98 09 02 C4 00 CA 03 C6
+1180  02 90 DE C6 FE C4 00 CA 0B C4 0D 35 C4 FF CA 10
+1190  C4 0A CA 09 C4 00 CA 0A 31 AA 10 01 C2 80 C9 80
+11A0  8F 00 C1 80 E4 FF 9C 4C BA 09 9C ED C2 0A 98 0A
+11B0  C2 0B 9C D8 C2 0A CA 0B 90 D2 C2 0B 98 CE 01 40
+11C0  D4 20 9C 28 C4 80 50 9C 1B C4 40 50 9C 19 C4 0F
+11D0  50 F4 07 01 C0 80 01 C7 02 3F 90 A9 0A 0B 0C 0D
+11E0  00 00 0E 0F 60 90 EF 60 F4 08 90 EA 60 E4 04 98
+11F0  08 3F 90 91 58 CA 0A 90 AF C4 00 37 C4 3F 33 3F
+
+
+tasm: Number of errors = 0
