@@ -81,17 +81,25 @@ To Run:-
 ./virtual-mk14      test5.hex
 ./virtual-mk14 -m   test5.hex
 
-start without -m to use the revised 0000 00 monitor
-		most programs start 0F20, e.g. type: 
-		 Z 0f20 T C4 M 07 M 07 M 3f Z 0F20 G 
-		 Should SET status Flag outputs
-		 Z 0f20 T C4 M AA M E4 M 55 M C8 M 02 M 3f Z 0F20 G 
-		 Should work out AA XOR 55  with -m to useand store it. 
-		    
-		start with -m to use the original ---- -- monitor
-		most programs start 0F20, e.g. type: 
-		 Z M 0f20 T C4 T M T 07 T M T 07 T M T 3f T Z G 0F20 T 
+Start without -m to use the revised 0000 00 monitor
 
-  Should SET status Flag outputs
-		 Z M 0f20 T C4 T M T AA T M T E4 T M T 55 T M T C8 T M T 02 T M T 3f T G 0F20 T 
-		 Should work out AA XOR 55 and store it. 
+most programs start 0F20, e.g. type: 
+
+The keystrokes below should SET status Flag outputs:
+Z 0f20 T C4 M 07 M 07 M 3f Z 0F20 G 		
+
+The keystrokes below should work out AA xor 55 and store it in the next location.
+  Z 0f20 T C4 M AA M E4 M 55 M C8 M 02 M 3f Z 0F20 G 
+
+		    
+Start with -m to use the original ---- -- monitor
+
+most programs start 0F20, e.g. type: 
+
+The keystrokes below should SET status Flag outputs:
+  Z M 0f20 T C4 T M T 07 T M T 07 T M T 3f T Z G 0F20 T 
+
+The keystrokes below should work out AA xor 55 and store it in the next location.
+  Z M 0f20 T C4 T M T AA T M T E4 T M T 55 T M T C8 T M T 02 T M T 3f T G 0F20 T 
+
+The new monitor uses less keystrokes, which on the MK14 keyboard was welmome.
