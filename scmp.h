@@ -50,7 +50,8 @@ void WriteMemory(int,int);				/* Write a byte to memory */
 void ResetCPU(void);					/* Reset the CPU */
 void Execute(int);						/* Execute instructions */
 void BlockExecute(void);				/* Execute an instruction block */
-int  LoadROM(void);						/* Load the SCIOS ROM into memory */
+//int  LoadROM(void);					/* Load the SCIOS ROM into memory */
+int  LoadROM( int version );			/* Load the SCIOS ROM into memory */
 void OutStr(char *Text);				/* Output a String */
 void InitialiseDisplay(void);			/* Initialise the display */
 void Latency(void);						/* Latency test */

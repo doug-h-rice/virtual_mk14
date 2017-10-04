@@ -33,7 +33,7 @@ void MinimalistEmulator(char *Object)
 {
 CONInitialise();
 InitialiseDisplay();
-LoadROM();
+LoadROM(0);
 ResetCPU();
 LoadObject(Object);
 while (CONKeyPressed(KEY_BREAK) == 0) BlockExecute();
@@ -173,10 +173,13 @@ return(KeyBuffer);
 /*
 unsigned char ROMImage[] =
 */
+
 unsigned char ROMImageV2[] =
 {/*
  *	 
- * version 2 of monitor 
+ * version 2 of monitor 0000 00
+ * usage:
+ * Z 0 F 2 0  M C 4 M 0 7 M 0 7 M 3 F Z 0 F 2 0 G
  * 
  */
  
@@ -208,11 +211,14 @@ unsigned char ROMImageV2[] =
 202,10,144,175,196,0,55,196,75,51,63
 };
 
-unsigned char ROMImage[] =
+unsigned char ROMImageV1[] =
 
 /*
  * 
  * 	version 1 of monitor ---- --
+ * usage:
+ * Z M 0 F 2 0  T C 4 T M T 0 7 T M T 0 7 T M T 3 F T Z G 0 F 2 0 T
+ * 
  *   
  */
 { 
@@ -259,19 +265,25 @@ unsigned char ROMImage[] =
 /*						Load in the SCIOS ROM						*/
 /********************************************************************/
 
-int LoadROM(void)
-{
-int n,c;
-for (n = 0;n < 512;n++)					/* ROM is 512 bytes */
-	{
-	c = (int)ROMImage[n];				/* and it is mirrored ! */
-	c = c & 0xFF;
-	Memory[n] = Memory[n+512] =
-				Memory[n+1024] = Memory[n+1536] = c;
-	}
-for (n = 0x800;n < 0x1000;n++)			/* Blank the rest of memory */
-						Memory[n] = 0;
-return(1);
+int  LoadROM( int version );
+
+int LoadROM( int version ){
+  int n;
+  int c;
+  for( n=0; n<512;n++ ) {					/* ROM is 512 bytes */
+	  if ( version == 1 ){	
+	    c = (int)ROMImageV1[n];				/* and it is mirrored ! */
+	  } else  { 
+	    c = (int)ROMImageV2[n];				/* and it is mirrored ! */
+	  }
+	  c = c & 0xFF;
+	  Memory[n] = Memory[n+512] = Memory[n+1024] = Memory[n+1536] = c;
+  };
+  for(n = 0x800;n < 0x1000;n++){			
+	  /* Blank the rest of memory */
+    Memory[n] = 0;
+  }  				
+  return(1);
 }
 
 /********************************************************************/

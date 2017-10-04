@@ -931,14 +931,10 @@ usage(void)
 {
     fprintf(stderr,
  
- #ifdef commen
- "This is Virtual MK14  Usage: %s {flags} files\n"
- "           -i <file>       take serial port input from file (if tape led is on)\n"
- "           -m <file>       use <file> as monitor (default is nassys3.nal)\n"
- "           -v              be verbose\n"
- #endif
  "This is Virtual MK14  Usage: %s {flags} files\n"
  "           -v              be verbose\n"
+ "           -m 		     use original ROMs \n"
+ "           -?              this help\n"
  
             ,progname);
     exit (1);
@@ -950,6 +946,7 @@ int main(int argc, char **argv)
 {
     int c;
     int loop_count;
+    int version =0;
 
     if (mysetup(argc, argv))
         return 1;
@@ -957,17 +954,22 @@ int main(int argc, char **argv)
     progname = argv[0];
 
    
-    while ((c = getopt(argc, argv, "i:m:v")) != EOF)
+    while ((c = getopt(argc, argv, "vm?")) != EOF)
         switch (c) {
         case 'v':
             verbose = 1;
             break;
+        case 'm':
+            version = 1;
+            break;
         case '?':
             usage();
+            break;
+            
         }
 
     puts("Virtual MK14  an MK14 emulator version \n"
-         "Copyright (C) 2000,2009,2017  Tommy Thorn, Doug Rice.\n"
+         "Copyright (C) 2000,2009,2017  Paul Robson + Tommy Thorn + Doug Rice.\n"
          "http://github.com/tommythorn/virtual-nascom.git\n"
          "Uses software from Paul Robson "
          "Virtual MK14 comes with ABSOLUTELY NO WARRANTY; for details\n"
@@ -996,20 +998,35 @@ int main(int argc, char **argv)
 		"G       Go		run from current address\n"
 		"Z       Abort	set addr \n"
 		"R       Reset\n"
-		"/       Quit (DOS)\n"
+		"/       Quit\n"
+         "\n");
 
+  if ( version !=1 ){
+	  puts(
+		" start without -m to use the revised 0000 00 monitor\n"
 		"most programs start 0F20, e.g. type: \n"
 		" Z 0f20 T C4 M 07 M 07 M 3f Z 0F20 G \n"
 		" Should SET status Flag outputs\n"
 		" Z 0f20 T C4 M AA M E4 M 55 M C8 M 02 M 3f Z 0F20 G \n"
+		" Should work out AA XOR 55  with -m to useand store it. \n"
+      ); } else {
+	  puts(
+		    
+		" start with -m to use the original ---- -- monitor\n"
+		"most programs start 0F20, e.g. type: \n"
+		" Z M 0f20 T C4 T M T 07 T M T 07 T M T 3f T Z G 0F20 T \n"
+		" Should SET status Flag outputs\n"
+		" Z M 0f20 T C4 T M T AA T M T E4 T M T 55 T M T C8 T M T 02 T M T 3f T G 0F20 T \n"
 		" Should work out AA XOR 55 and store it. \n"
+ 
 
          "\n");
-    
+      };
+      
+          
     CONInitialise();
 	InitialiseDisplay();
-	LoadROM();
-	
+	LoadROM( version );
 	ResetCPU();
 
     for (; optind < argc; optind++){
