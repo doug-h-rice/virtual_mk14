@@ -37,30 +37,46 @@ Virtual MK14 comes with ABSOLUTELY NO WARRANTY;
 
 ./virtual-mk14 <file.hex>\n"
 
-The emulator dumps the memory state in `memorydump.nas`\n"
-upon exit so one might resume execution later on.\n"
+The emulator dumps the memory state in `memorydump.nas`
+upon exit so one might resume execution later on.
 
-Status with  F0,F1,F2,IE is displayed on right in 2x4 grid.\n"
+Status with  F0,F1,F2,IE is displayed on right in 2x4 grid.
 
-"The following keys are supported:\n"
+The following keys are supported:
 
 * END- saves 0fXX to memorysave.nas 
+
 * F1 - saves 0fXX to memorysave.nas 
+
 * F2 - MEM 
+
 * F3 - GO 
+
 * F4 - exits the emulator
+
 * F5 - toggles between stupidly fast and "normal" speed
+
 * F9 - resets the emulated MK14
+
 ===========
+
 Keys to use
+
 ===========
-		0-9,A-F Hexadecimal Keys
-		T       Term	set mem  
-		M       Mem	increment address 
-		G       Go		run from current address
-		Z       Abort	set addr 
-		R       Reset SC/MP
-		/       Quit emulator
+
+0-9,A-F Hexadecimal Keys
+
+T       Term	set mem  
+
+M       Mem	increment address 
+
+G       Go		run from current address
+
+Z       Abort	set addr 
+
+R       Reset SC/MP
+
+/       Quit emulator
 
 
 mymk14.co.uk supplied the listing of the original ---- -- rom. SCIOS_V1
