@@ -710,6 +710,9 @@ int load_both_formats(char *file) {
      if ( hex_read ){
        printf( "\n%x  %2d, %2X, %x  : ", hex_read, hex_len, hex_addr, hex_cmd );
        for( hex_count= 0 ; hex_count < hex_len ; hex_count++ ){
+         /* limit address */ 
+		 hex_addr = hex_addr & 0xFFF;
+		   
 	     hex_read = fscanf(stream, "%2x",&hex_data ); 	  
          printf(" %02X", hex_data );
          Memory[ hex_addr ] = hex_data ;
@@ -725,7 +728,8 @@ int load_both_formats(char *file) {
 	if ( hex_read > 4 ) {
 	  printf("\n%04x   %02x %02x %02x %02x  %02x %02x %02x %02x  %02x {%d %d}",	
 	              a,    b1,  b2, b3,    b4,   b5,  b6,  b7,  b8,   b9, (int)c10, (int)c11 );
-	  if ( a > 0 ){  
+	  if ( a > 0 ){ 
+		a = ( a & 0xFFF );   
 		Memory[a]   = b1;
 		Memory[a+1] = b2;
 		Memory[a+2] = b3;
