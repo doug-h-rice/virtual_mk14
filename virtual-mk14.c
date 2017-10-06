@@ -215,6 +215,7 @@ unsigned char keym[9];
 /********************************************************************/
 
 int setup(int, char **);
+int load_both_formats(char *file);
 void save_nascom(int start, int end, const char *name);
 
 //#define RAM(a)		ram[(a)&0xffff]
@@ -556,15 +557,15 @@ void handle_app_control(SDL_keysym keysym, bool keydown)
 
         switch (keysym.sym) {
         case SDLK_END: {
-            printf("END key - saving memory\n");
-            save_nascom(0xf00, 0xfff, "memorysave.nas");
+            printf("END key - saving memory in ram.nas\n");
+            save_nascom(0xf00, 0xfff, "ram.nas");
             if (verbose) printf("mem dumped\n");
             break;
         }
 
         case SDLK_F1: 
-            printf("F1 key - saving memory\n");
-            save_nascom(0xf00, 0xfff, "memorysave.nas");
+            printf("F1 key - saving memory in ram.nas\n");
+            save_nascom(0xf00, 0xfff, "ram.nas");
             if (verbose) printf("mem dumped\n");
             break;
 			break;
@@ -655,56 +656,107 @@ void handle_key_event_raw(SDL_keysym keysym, bool keydown)
 }
 
 
-
-int load_nascom_ihx(char *file) {
+/*
+ * 
+ * This function loads *.nas, *.ihx, *.hex format files 
+ * If an error is found it reports an error and returns.
+ * 
+ * it is more robust than the originals
+ * 
+ * */  
+int load_both_formats(char *file) {
    uint hex_read, hex_len, hex_addr, hex_cmd ;
    uint hex_count, hex_data, hex_check ;
+   
+   /*0F58 00 00 00 00 00 00 00 00 00*/
+   int a, b1, b2, b3, b4, b5, b6, b7, b8, b9;
+   char c10, c11;
+   long last,now;
+
   
    FILE *stream = fopen( file,"rb");
-   //printf("load_nascom_ihx(char *file)");
    printf("\n === loading: %s ", file );
 
    if (!stream) {
 	   stream=0;
-	   /* error_msg(file,"Can't read file"); */
-       printf("error load_nascom_ihx(char *file)");
-
-	   return 0;
+       printf("error loading file: %s", file );
+	   return (1==0);
    }
+
+
+   /* use ftell() to check for read errors */
+   last=0;
+   now=0;
    while ( !feof( stream ) ) {
-     
+/*
+ * 
+ * .ihx format and .hex format
+:180FDC00F6C40135C20031C100CA00C20131C100CA01C4FFCA0F925D84
+:00000001FF
+ * 
+ *
+:len addr 00 xx xx xx .. check                                        
+:18  0FDC 00 F6C40135C20031C100CA00C20131C100CA01C4FFCA0F925D84
+:18  0FDC 00 F6C40135C20031C100CA00C20131C100CA01C4FFCA0F925D84
+:0E  100E 00 6C6C6F20646F75670A00DDE5DD21 F4 
+ *  
+ */
+ 	   	   
    /*:0E 100E 00 6C6C6F20646F75670A00DDE5DD21 F4 */
-      
+//     printf( "\nftell: %ld\n", ftell(stream) );
+     
      hex_read = fscanf(stream,":%2x%4x%2x",&hex_len,&hex_addr,&hex_cmd);
-     if (hex_read ){
+
+     if ( hex_read ){
        printf( "\n%x  %2d, %2X, %x  : ", hex_read, hex_len, hex_addr, hex_cmd );
-      
        for( hex_count= 0 ; hex_count < hex_len ; hex_count++ ){
 	     hex_read = fscanf(stream, "%2x",&hex_data ); 	  
          printf(" %02X", hex_data );
-  //       RAM( hex_addr ) = hex_data ; 
          Memory[ hex_addr ] = hex_data ;
          hex_addr ++;
        }    
        hex_read = fscanf(stream, "%2x\n",&hex_check);
-     }
+     }     
+   /* *.nas format   addr datax8 00 BS BS  e.g. */
+   /*0F58 00 00 00 00 00 00 00 00 00*/
+    hex_read = fscanf(stream, "%x %x %x %x %x %x %x %x %x %x%c%c\n",
+	       &a, &b1, &b2, &b3, &b4, &b5, &b6, &b7, &b8, &b9, &c10, &c11 );
+	       
+	if ( hex_read > 4 ) {
+	  printf("\n%04x   %02x %02x %02x %02x  %02x %02x %02x %02x  %02x {%d %d}",	
+	              a,    b1,  b2, b3,    b4,   b5,  b6,  b7,  b8,   b9, (int)c10, (int)c11 );
+	  if ( a > 0 ){  
+		Memory[a]   = b1;
+		Memory[a+1] = b2;
+		Memory[a+2] = b3;
+		Memory[a+3] = b4;
+		Memory[a+4] = b5;
+		Memory[a+5] = b6;
+		Memory[a+6] = b7;
+		Memory[a+7] = b8;
+      }
+    }
+
+	/* 
+	 * 
+	 * if the fscanf's have not matched,
+	 * the position reported by ftell() does not change 
+	 * 
+	 */
+
+	/* check for error reading data */
+	 
+    now=ftell( stream );
+    if (last == now){
+		printf("\n format error @ %ld\n",now);
+		break;
+	};
+    last = now;
    }
    fclose(stream);
    stream=0;
-
-   //printf(" exit from load_nascom_ihx()\n");
-   /* hex_read = getchar() ; */
-   return 1  ;
+   return (1==1)  ;
 }
-
-  
- /* 
- * 
- *======================================================================== 
- * 
- */
-
-
 
 void save_nascom(int start, int end, const char *name)
 {
@@ -911,9 +963,6 @@ Bit Function 	Notes
 	RenderItem(&seg7_font, ( ( Stat & 0x20 ) ? 1 : 3  ),  (x*4+6) * FONT_W, (FONT_V+1) * FONT_H);
 	RenderItem(&seg7_font, ( ( Stat & 0x40 ) ? 1 : 3  ),  (x*4+6) * FONT_W, (FONT_V+2) * FONT_H);
 	RenderItem(&seg7_font, ( ( Stat & 0x80 ) ? 1 : 3  ),  (x*4+6) * FONT_W, (FONT_V+3) * FONT_H);
-
-
-
 }
 
 int sim_delay(void)
@@ -926,8 +975,7 @@ int sim_delay(void)
     return action;
 }
 
-static void
-usage(void)
+static void usage(void)
 {
     fprintf(stderr,
  
@@ -976,17 +1024,17 @@ int main(int argc, char **argv)
          "see the file \"COPYING\" in the distribution directory.\n"
          "\n"
          "./virtual-mk14 <file.hex>\n"
-         "The emulator dumps the memory state in `memorydump.nas`\n"
-         "upon exit so one might resume execution later on.\n"
+         "On exit the emulator save the memory state in `ram_.nas`\n"
+         "so it can be loaded later on.\n"
          "Status with  F0,F1,F2,IE is displayed on right in 2x4 grid.\n"
          "\n"
          "The following keys are supported:\n"
          "\n"
-         "* END- saves 0fXX to memorysave.nas \n"
-         "* F1 - saves 0fXX to memorysave.nas \n"
+         "* END- saves 0fXX to ram.nas \n"
+         "* F1 - saves 0fXX to ram.nas \n"
          "* F2 - MEM \n"
          "* F3 - GO \n"
-         "* F4 - exits the emulator\n"
+         "* F4 - exits the emulator and save to ram_.nas \n"
          "* F5 - toggles between stupidly fast and \"normal\" speed\n"
          "* F9 - resets the emulated Nascom\n"
 		"===========\n"
@@ -1030,7 +1078,8 @@ int main(int argc, char **argv)
 	ResetCPU();
 
     for (; optind < argc; optind++){
-        load_nascom_ihx(argv[optind]);
+		/* load hex data */
+        load_both_formats(argv[optind]);
     }
 
     loop_count = 0;
@@ -1053,7 +1102,7 @@ int main(int argc, char **argv)
 	  loop_count += 1;
 	}  
     CONTerminate();
-    save_nascom(0xf00, 0xfff, "memorydump.nas");
+    save_nascom(0xf00, 0xfff, "ram_.nas");
 
     exit(0);
 }
