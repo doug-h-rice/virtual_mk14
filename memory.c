@@ -17,7 +17,6 @@ static int KeyStatus[DIGITS];
 
 static int DigitLatch = 0;
 static int SegmentLatch = 0;
-static int KeyBuffer = 0xFF;
 
 #include "scmp.h"
 
