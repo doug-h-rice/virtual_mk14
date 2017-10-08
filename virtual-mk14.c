@@ -660,8 +660,13 @@ void handle_key_event_raw(SDL_keysym keysym, bool keydown)
  * 
  * This function loads *.nas, *.ihx, *.hex format files 
  * If an error is found it reports an error and returns.
+ * This prevents comment lines before the HEX data.
  * 
- * it is more robust than the originals
+ * it is more robust than the originals.
+ * 
+ * However it does not calculate  checksums 
+ * 
+ * You can edit the .hex or .nas files 
  * 
  * */  
 int load_both_formats(char *file) {
@@ -708,7 +713,7 @@ int load_both_formats(char *file) {
      hex_read = fscanf(stream,":%2x%4x%2x",&hex_len,&hex_addr,&hex_cmd);
 
      if ( hex_read ){
-       printf( "\n%x  %2d, %2X, %x  : ", hex_read, hex_len, hex_addr, hex_cmd );
+       printf( "\n%x:  %2d, [%04X], %x  : ", hex_read, hex_len, hex_addr, hex_cmd );
        for( hex_count= 0 ; hex_count < hex_len ; hex_count++ ){
          /* limit address */ 
 		 hex_addr = hex_addr & 0xFFF;
@@ -725,10 +730,10 @@ int load_both_formats(char *file) {
     hex_read = fscanf(stream, "%x %x %x %x %x %x %x %x %x %x%c%c\n",
 	       &a, &b1, &b2, &b3, &b4, &b5, &b6, &b7, &b8, &b9, &c10, &c11 );
 	       
-	if ( hex_read > 4 ) {
-	  printf("\n%04x   %02x %02x %02x %02x  %02x %02x %02x %02x  %02x {%d %d}",	
-	              a,    b1,  b2, b3,    b4,   b5,  b6,  b7,  b8,   b9, (int)c10, (int)c11 );
-	  if ( a > 0 ){ 
+	if ( hex_read == 12l ) {
+	  printf("\n%d; [%04x]   %02x %02x %02x %02x  %02x %02x %02x %02x  %02x {%d %d}",	
+	        hex_read,      a,    b1,  b2, b3,    b4,   b5,  b6,  b7,  b8,   b9, (int)c10, (int)c11 );
+	  if ( c10 == c11 ){ 
 		a = ( a & 0xFFF );   
 		Memory[a]   = b1;
 		Memory[a+1] = b2;
